@@ -73,6 +73,7 @@ extern SR_PRIV struct sr_input_module input_raw_analog;
 extern SR_PRIV struct sr_input_module input_logicport;
 extern SR_PRIV struct sr_input_module input_saleae;
 extern SR_PRIV struct sr_input_module input_null;
+extern SR_PRIV struct sr_input_module input_touchstone;
 /** @endcond */
 
 static const struct sr_input_module *input_module_list[] = {
@@ -86,6 +87,7 @@ static const struct sr_input_module *input_module_list[] = {
 	&input_logicport,
 	&input_saleae,
 	&input_null,
+	&input_touchstone,
 	NULL,
 };
 

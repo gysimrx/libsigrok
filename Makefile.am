@@ -83,7 +83,8 @@ libsigrok_la_SOURCES += \
 	src/input/trace32_ad.c \
 	src/input/vcd.c \
 	src/input/wav.c \
-	src/input/null.c
+	src/input/null.c \
+	src/input/touchstone.c
 
 # Output modules
 libsigrok_la_SOURCES += \
