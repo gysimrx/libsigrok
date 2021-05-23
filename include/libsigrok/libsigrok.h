@@ -738,6 +738,9 @@ enum sr_configkey {
 	 */
 	SR_CONF_MULTIPLEXER,
 
+	/** The device can act as a network analyzer. */
+	SR_CONF_NETWORK_ANALYZER,
+
 	/* Update sr_key_info_config[] (hwdriver.c) upon changes! */
 
 	/*--- Driver scan options -------------------------------------------*/
@@ -1091,6 +1094,26 @@ enum sr_configkey {
 	 * @arg set: change resistance target
 	 */
 	SR_CONF_RESISTANCE_TARGET,
+
+	/** Span specifies band center frequency (between start and stop).
+	 * @arg type double (Hz)
+	 * @arg set: change span. Adjusts also start and stop frequency.
+	 * @arg list: Supported frequency range as (low, high, step)
+	 */
+	SR_CONF_BAND_CENTER_FREQUENCY,
+
+	/** Span specifies the range between the start and stop frequencies.
+	 * @arg type double (Hz)
+	 * @arg set: change span. Adjusts also start and stop frequency.
+	 * @arg list: Supported frequency range as (low, high, step)
+	 */
+	SR_CONF_SPAN,
+
+	/*SR_CONF_RESOLUTION_BANDWIDTH,
+
+	SR_CONF_VIDEO_BANDWIDTH,
+
+	SR_CONF_REF_LEVEL,*/
 
 	/* Update sr_key_info_config[] (hwdriver.c) upon changes! */
 
