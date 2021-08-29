@@ -64,6 +64,7 @@ static struct sr_key_info sr_key_info_config[] = {
 	{SR_CONF_SIGNAL_GENERATOR, SR_T_STRING, NULL, "Signal generator", NULL},
 	{SR_CONF_POWERMETER, SR_T_STRING, NULL, "Power meter", NULL},
 	{SR_CONF_MULTIPLEXER, SR_T_STRING, NULL, "Multiplexer", NULL},
+	{SR_CONF_SPECTRUM_ANALYZER, SR_T_STRING, NULL, "Spectrum analyzer", NULL},
 
 	/* Driver scan options */
 	{SR_CONF_CONN, SR_T_STRING, "conn",
@@ -212,6 +213,19 @@ static struct sr_key_info sr_key_info_config[] = {
 		"Power Target", NULL},
 	{SR_CONF_RESISTANCE_TARGET, SR_T_FLOAT, "resistance_target",
 		"Resistance Target", NULL},
+
+	{SR_CONF_PRESET, SR_T_BOOL, "preset",
+		"Preset", NULL},
+	{SR_CONF_BAND_CENTER_FREQUENCY, SR_T_FLOAT, "band_center_frequency",
+		"Band center frequency", NULL},
+	{SR_CONF_SPAN, SR_T_FLOAT, "span",
+		"Frequency Span", NULL},
+	{SR_CONF_RESOLUTION_BANDWIDTH, SR_T_UINT64, "rbw",
+		"Resolution Bandwidth", NULL},
+	{SR_CONF_VIDEO_BANDWIDTH, SR_T_UINT64, "vbw",
+		"Video Bandwidth", NULL},
+	{SR_CONF_REF_LEVEL, SR_T_FLOAT, "ref_level",
+		"Reference Level", NULL},
 
 	/* Special stuff */
 	{SR_CONF_SESSIONFILE, SR_T_STRING, "sessionfile",
