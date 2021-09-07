@@ -226,6 +226,10 @@ static struct sr_key_info sr_key_info_config[] = {
 		"Video Bandwidth", NULL},
 	{SR_CONF_REF_LEVEL, SR_T_FLOAT, "ref_level",
 		"Reference Level", NULL},
+    {SR_CONF_COMMAND_SET, SR_T_STRING, "cmd_set",
+		"write a command", NULL},
+    {SR_CONF_COMMAND_REQ, SR_T_STRING, "cmd_req",
+		"write a command and read answer", NULL},
 
 	/* Special stuff */
 	{SR_CONF_SESSIONFILE, SR_T_STRING, "sessionfile",
