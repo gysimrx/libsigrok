@@ -170,7 +170,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 
 	ipdbg_awg_get_addrwidth_and_datawidth(tcp, devc);
 
-	ipdbg_awg_get_isrunning(tcp, devc);
+	ipdbg_awg_get_status(tcp, devc);
 
 	ipdbg_awg_init_waveform(devc);
 
@@ -211,16 +211,25 @@ static int dev_close(struct sr_dev_inst *sdi)
 	struct ipdbg_awg_tcp *tcp;
 
 	tcp = sdi->conn;
+	devc = sdi->priv;
+
+	if (devc && tcp)
+		ipdbg_awg_get_status(tcp, devc);
+
 	if (tcp)
 		ipdbg_awg_tcp_close(tcp);
 
 	sdi->conn = NULL;
-	if (!(devc = sdi->priv))
+
+	if (!devc)
 		return SR_ERR;
 
 	if (devc->wave_buffer)
 		g_free(devc->wave_buffer);
 	devc->wave_buffer = NULL;
+
+	if (!tcp)
+		return SR_ERR;
 
 	return SR_OK;
 }

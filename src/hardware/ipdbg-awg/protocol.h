@@ -61,6 +61,7 @@ struct dev_context {
 	uint32_t addr_width_bytes;
 	int waveform;
 	gboolean is_running;
+	gboolean has_double_buffer;
 	gboolean complex_part_parallel;
 	uint8_t periods;
 };
@@ -76,8 +77,8 @@ SR_PRIV void ipdbg_awg_abort_acquisition(const struct sr_dev_inst *sdi);
 
 SR_PRIV void ipdbg_awg_get_addrwidth_and_datawidth(
 		struct ipdbg_awg_tcp *tcp, struct dev_context *devc);
-SR_PRIV void ipdbg_awg_get_isrunning(
-		struct ipdbg_awg_tcp *tcp, struct dev_context *devc);
+SR_PRIV void ipdbg_awg_get_status(struct ipdbg_awg_tcp *tcp,
+		struct dev_context *devc);
 SR_PRIV void ipdbg_awg_init_waveform(struct dev_context *devc);
 SR_PRIV int ipdbg_awg_update_waveform(const struct sr_dev_inst *sdi);
 SR_PRIV int ipdbg_awg_set_frequency(

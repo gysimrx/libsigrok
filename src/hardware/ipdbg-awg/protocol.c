@@ -43,7 +43,7 @@
 #define RETURN_SIZES_COMMAND        0xF2
 #define WRITE_SAMPLES_COMMAND       0xF3
 #define SET_NUMBEROFSAMPLES_COMMAND 0xF4
-#define RETURN_ISRUNNING_COMMAND    0xF5
+#define RETURN_STATUS_COMMAND    	0xF5
 
 #define STR_WAVEFORM_DC        "DC"
 #define STR_WAVEFORM_SINE      "Sine"
@@ -283,19 +283,23 @@ SR_PRIV void ipdbg_awg_get_addrwidth_and_datawidth(
 		(devc->addr_width + host_word_size - 1) / host_word_size;
 }
 
-SR_PRIV void ipdbg_awg_get_isrunning(
+SR_PRIV void ipdbg_awg_get_status(
 	struct ipdbg_awg_tcp *tcp, struct dev_context *devc)
 {
 	uint8_t buf[1];
 	uint8_t read_cmd;
-	read_cmd = RETURN_ISRUNNING_COMMAND;
+	const uint8_t enabledFlag = 0x01;
+	const uint8_t doubleBufferFlag = 0x02;
+
+	read_cmd = RETURN_STATUS_COMMAND;
 	if (ipdbg_awg_tcp_send(tcp, &read_cmd, 1) != SR_OK)
 		sr_warn("Can't send read running");
 
 	if (ipdbg_awg_tcp_receive_blocking(tcp, buf, 1) != 1)
 		sr_warn("Can't get state from device");
 
-	devc->is_running = buf[0] == 1;
+	devc->is_running = (buf[0] & enabledFlag);
+	devc->has_double_buffer = (buf[0] & doubleBufferFlag);
 }
 
 static void ipdbg_awg_calculate_dc(struct dev_context *devc)
@@ -476,7 +480,7 @@ static void ipdbg_awg_update_limit_samples(struct dev_context *devc)
 		}
 		else {
 			f = fabs(f);
-			p = round(f/fs*N);
+			p = floor(f/fs*N);
 			m = round(fs/f*p);
 			//devc->frequency_act = fs*(double)p/(double)m + fc;
 		}
@@ -490,7 +494,7 @@ static void ipdbg_awg_update_limit_samples(struct dev_context *devc)
 		if (f > fs/2.0)
 			f = fs/2.0;
 
-		size_t p = round(f/fs*N);
+		size_t p = floor(f/fs*N);
 		size_t m = round(fs/f*p);
 
 		//devc->frequency_act = fs*(double)p/(double)m;
@@ -520,30 +524,32 @@ SR_PRIV int ipdbg_awg_update_waveform(const struct sr_dev_inst *sdi)
 	if (!(devc = sdi->priv) || !(tcp = sdi->conn))
 		return SR_ERR_BUG;
 
-	was_running = devc->is_running;
-	if (devc->is_running) {
-		ret = ipdbg_awg_stop(sdi);
-		if (ret != SR_OK) {
-			sr_err("stopping the generator failed");
-			return ret;
+	if (!devc->has_double_buffer) {
+		was_running = devc->is_running;
+		if (devc->is_running) {
+			ret = ipdbg_awg_stop(sdi);
+			if (ret != SR_OK) {
+				sr_err("stopping the generator failed");
+				return ret;
+			}
 		}
 	}
+	else
+		was_running = FALSE;
 
 	buffer[0] = SET_NUMBEROFSAMPLES_COMMAND;
 	ret = ipdbg_awg_tcp_send(tcp, buffer, 1);
-	if (ret != SR_OK)
-	{
+	if (ret != SR_OK) {
 		sr_warn("Can't send num_samples command");
 		return ret;
 	}
 
 	ret = SR_OK;
-	for(size_t i = 0 ; i < devc->addr_width_bytes && ret == SR_OK ; ++i) {
+	for (size_t i = 0 ; i < devc->addr_width_bytes && ret == SR_OK ; ++i) {
 		buffer[0] = (devc->limit_samples-1) >> ((devc->addr_width_bytes-1-i)*8);
 		ret = ipdbg_awg_send_escaping(tcp, buffer, 1);
 	}
-	if (ret != SR_OK)
-	{
+	if (ret != SR_OK) {
 		sr_warn("Can't send num_samples");
 		return ret;
 	}
@@ -552,26 +558,55 @@ SR_PRIV int ipdbg_awg_update_waveform(const struct sr_dev_inst *sdi)
 
 	buffer[0] = WRITE_SAMPLES_COMMAND;
 	ret = ipdbg_awg_tcp_send(tcp, buffer, 1);
-	if (ret != SR_OK)
-	{
+	if (ret != SR_OK) {
 		sr_err("Can't send write samples command");
 		return ret;
 	}
 
 	ret = SR_OK;
-	for (unsigned int i = 0; i < devc->limit_samples ; i++)
-	{
+	for (unsigned int i = 0; i < devc->limit_samples ; i++) {
 		int64_t val = data_to_send[i];
 		for (size_t k = 0 ; k < devc->data_width_bytes && ret == SR_OK ; ++k) {
 			buffer[0] = val >> ((devc->data_width_bytes-1-k)*8);
 			ret = ipdbg_awg_send_escaping(tcp, buffer, 1);
 		}
 	}
-	if (ret != SR_OK)
-	{
+	if (ret != SR_OK) {
 		sr_err("Can't send samples");
 		return ret;
 	}
+
+	int receivedAcknowledge = (devc->limit_samples * devc->data_width_bytes / 64) +1;
+	gboolean recievedTermAck = FALSE;
+	uint8_t retry_count = 0;
+	while (receivedAcknowledge) {
+		uint8_t akn_buffer;
+		int received = ipdbg_awg_tcp_receive_blocking(tcp, &akn_buffer, 1);
+		if (received < 0) {
+			sr_err("reading from socket failed");
+			return SR_ERR_IO;
+		}
+		else if (received == 0) {
+			if (++retry_count >= 10) {
+				sr_err("timeout while writing samples");
+				return SR_ERR_TIMEOUT;
+			}
+		}
+		else {
+			retry_count = 0;
+			if (akn_buffer == 0xFB) {
+				recievedTermAck = TRUE;
+				break;
+			}
+		}
+		receivedAcknowledge -= received;
+	}
+
+	if (recievedTermAck == FALSE) {
+		sr_err("Didn't receive terminating acknowledge");
+		return SR_ERR_IO;
+	}
+
 
 	if (was_running) {
 		ret = ipdbg_awg_start(sdi);
