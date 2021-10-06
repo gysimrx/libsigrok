@@ -64,6 +64,7 @@ static struct sr_key_info sr_key_info_config[] = {
 	{SR_CONF_SIGNAL_GENERATOR, SR_T_STRING, NULL, "Signal generator", NULL},
 	{SR_CONF_POWERMETER, SR_T_STRING, NULL, "Power meter", NULL},
 	{SR_CONF_MULTIPLEXER, SR_T_STRING, NULL, "Multiplexer", NULL},
+	{SR_CONF_NETWORK_ANALYZER, SR_T_STRING, NULL, "Network analyzer", NULL},
 
 	/* Driver scan options */
 	{SR_CONF_CONN, SR_T_STRING, "conn",
@@ -212,6 +213,12 @@ static struct sr_key_info sr_key_info_config[] = {
 		"Power Target", NULL},
 	{SR_CONF_RESISTANCE_TARGET, SR_T_FLOAT, "resistance_target",
 		"Resistance Target", NULL},
+	{SR_CONF_PRESET, SR_T_BOOL, "preset",
+		"Preset", NULL},
+	{SR_CONF_BAND_CENTER_FREQUENCY, SR_T_FLOAT, "band_center_frequency",
+		"Band center frequency", NULL},
+	{SR_CONF_SPAN, SR_T_FLOAT, "span",
+		"Frequency Span", NULL},
 
 	/* Special stuff */
 	{SR_CONF_SESSIONFILE, SR_T_STRING, "sessionfile",
@@ -285,6 +292,7 @@ static struct sr_key_info sr_key_info_mq[] = {
 	{SR_MQ_HARMONIC_RATIO, 0, "harmonic_ratio", "Harmonic ratio", NULL},
 	{SR_MQ_ENERGY, 0, "energy", "Energy", NULL},
 	{SR_MQ_ELECTRIC_CHARGE, 0, "electric_charge", "Electric charge", NULL},
+	{SR_MQ_N_PORT_PARAMETER, 0, "n_port_parameters", "N-Port parameter set", NULL},
 	ALL_ZERO
 };
 
@@ -319,6 +327,12 @@ static struct sr_key_info sr_key_info_mqflag[] = {
 	{SR_MQFLAG_REFERENCE, 0, "reference", "Reference", NULL},
 	{SR_MQFLAG_UNSTABLE, 0, "unstable", "Unstable", NULL},
 	{SR_MQFLAG_FOUR_WIRE, 0, "four_wire", "4-Wire", NULL},
+	{SR_MQFLAG_N_PORT_S_PARAMETER, 0, "s_params", "S-Parameters", NULL},
+	{SR_MQFLAG_N_PORT_Z_PARAMETER, 0, "z_params", "Z-Parameters", NULL},
+	{SR_MQFLAG_N_PORT_Y_PARAMETER, 0, "y_params", "Y-Parameters", NULL},
+	{SR_MQFLAG_TWO_PORT_G_PARAMETER, 0, "g_params", "G-Parameters", NULL},
+	{SR_MQFLAG_TWO_PORT_H_PARAMETER, 0, "h_params", "H-Parameters", NULL},
+	{SR_MQFLAG_TWO_PORT_NOISE_DATA, 0, "noise_data", "Noise Data", NULL},
 	ALL_ZERO
 };
 
