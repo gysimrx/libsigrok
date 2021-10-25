@@ -75,6 +75,38 @@ SR_PRIV int rohde_schwarz_zvx_init(struct sr_scpi_dev_inst *scpi)
 	if (ret != SR_OK)
 		return ret;
 
+
+
+    ret = sr_scpi_send(scpi, "CALCulate2:PARameter:SDEFine 'trc11', 'S11'");
+	if (ret != SR_OK)
+		return ret;
+    ret = sr_scpi_send(scpi, "CALCulate2:PARameter:SDEFine 'trc22', 'S22'");
+	if (ret != SR_OK)
+		return ret;
+    ret = sr_scpi_send(scpi, "CALCulate4:PARameter:SDEFine 'trc12', 'S12'");
+	if (ret != SR_OK)
+		return ret;
+
+    ret = sr_scpi_send(scpi, "DISPlay:WINDow2:STATe ON");
+	if (ret != SR_OK)
+		return ret;
+    ret = sr_scpi_send(scpi, "DISPlay:WINDow3:STATe ON");
+	if (ret != SR_OK)
+		return ret;
+    ret = sr_scpi_send(scpi, "DISPlay:WINDow4:STATe ON");
+	if (ret != SR_OK)
+		return ret;
+
+    ret = sr_scpi_send(scpi, "DISPlay:WINDow2:TRACe1:FEED 'trc11'");
+	if (ret != SR_OK)
+		return ret;
+    ret = sr_scpi_send(scpi, "DISPlay:WINDow3:TRACe1:FEED 'trc22'");
+	if (ret != SR_OK)
+		return ret;
+    ret = sr_scpi_send(scpi, "DISPlay:WINDow4:TRACe1:FEED 'trc12'");
+	if (ret != SR_OK)
+		return ret;
+
 	return ret;
 }
 
@@ -88,14 +120,14 @@ SR_PRIV int rohde_schwarz_zvx_remote(const struct sr_dev_inst *sdi)
 		return SR_ERR;
 
 	g_mutex_lock(&devc->rw_mutex);
-	/* disable display updates: */
-	ret = sr_scpi_send(scpi, "SYST:DISP:UPD OFF");
+	/* enable display updates: */
+	ret = sr_scpi_send(scpi, "SYST:DISP:UPD ON");
 	if (ret != SR_OK) {
 		g_mutex_unlock(&devc->rw_mutex);
 		return ret;
 	}
 
-	ret = sr_scpi_send(scpi, "SYST:USER:DISP:TITL 'sigrok controlled'");
+//	ret = sr_scpi_send(scpi, "SYST:USER:DISP:TITL 'sigrok controlled'");
 	g_mutex_unlock(&devc->rw_mutex);
 	return ret;
 }
@@ -110,7 +142,7 @@ SR_PRIV int rohde_schwarz_zvx_local(const struct sr_dev_inst *sdi)
 		return SR_ERR;
 
 	g_mutex_lock(&devc->rw_mutex);
-	/* disable display updates: */
+	/* enable display updates: */
 	ret = sr_scpi_send(scpi, "SYST:DISP:UPD ON");
 	g_mutex_unlock(&devc->rw_mutex);
 
@@ -458,6 +490,8 @@ static int rohde_schwarz_zvx_receive_trace(struct sr_scpi_dev_inst *scpi,
 	return SR_OK;
 }
 
+
+
 SR_PRIV int rohde_schwarz_zvx_receive_data(int fd, int revents, void *cb_data)
 {
 	struct sr_dev_inst *sdi;
@@ -478,12 +512,12 @@ SR_PRIV int rohde_schwarz_zvx_receive_data(int fd, int revents, void *cb_data)
 	g_mutex_lock(&devc->rw_mutex);
 	size_t old_sweep_pts = devc->sweep_points;
 
-	ret = sr_scpi_get_int(scpi, "SWEep:POINts?", &sweep_points);
+	ret = sr_scpi_get_int(scpi, "SWEEP:POINTS?", &sweep_points);
 	if (ret != SR_OK) {
 		g_mutex_unlock(&devc->rw_mutex);
 		return TRUE;
 	}
-	devc->sweep_points = sweep_points;
+	devc->sweep_points = sweep_points*4;
 
 	if (old_sweep_pts < devc->sweep_points) {
 		free(devc->x_vals);
@@ -512,12 +546,12 @@ SR_PRIV int rohde_schwarz_zvx_receive_data(int fd, int revents, void *cb_data)
 		}
 	}
 
-	if ((ret = rohde_schwarz_zvx_receive_trace(scpi, "TRACE:DATA? TRACE1",
+	if ((ret = rohde_schwarz_zvx_receive_trace(scpi, "CALC:DATA:DALL? FDATA",
 							devc->y_vals, devc->sweep_points)) != SR_OK) {
 		g_mutex_unlock(&devc->rw_mutex);
 		return TRUE;
 	}
-	if ((ret = rohde_schwarz_zvx_receive_trace(scpi, "TRACE:DATA:X? TRACE1",
+	if ((ret = rohde_schwarz_zvx_receive_trace(scpi, "CALC:DATA:DALL? FDATA",
 							devc->x_vals, devc->sweep_points)) != SR_OK) {
 		g_mutex_unlock(&devc->rw_mutex);
 		return TRUE;

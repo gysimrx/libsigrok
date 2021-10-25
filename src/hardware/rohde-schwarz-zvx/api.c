@@ -29,6 +29,7 @@ static const char *manufacturer = "Rohde&Schwarz";
 
 static const char *device_models[] = {
 	"ZVA8-4Port",
+    "ZVB4-2Port",
 };
 
 static const uint32_t scanopts[] = {
