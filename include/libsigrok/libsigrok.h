@@ -1112,6 +1112,27 @@ enum sr_configkey {
 	 */
 	SR_CONF_SPAN,
 
+	/** Define which S-parameters are enabled
+	 * @arg type string ("S11,S22,...")
+	 * @arg set: define enabled S-Parameter
+	 * @arg get: get the active Traces
+	 */
+	SR_CONF_SPARAMS,
+
+	/** write command string to device.
+	 *  used to support "exotic" functions of a device.
+	 *  for example to send scpi commands not covered with standard
+	 *  config parameters from sigrok.
+	 */
+	SR_CONF_COMMAND_SET,
+
+	/** write command string to device and read back the answer.
+	 *  used to support "exotic" functions of a device.
+	 *  for example to send scpi commands not covered with standard
+	 *  config parameters from sigrok.
+	 */
+	SR_CONF_COMMAND_REQ,
+
 	/* Update sr_key_info_config[] (hwdriver.c) upon changes! */
 
 	/*--- Special stuff -------------------------------------------------*/

@@ -219,6 +219,12 @@ static struct sr_key_info sr_key_info_config[] = {
 		"Band center frequency", NULL},
 	{SR_CONF_SPAN, SR_T_FLOAT, "span",
 		"Frequency Span", NULL},
+    {SR_CONF_SPARAMS, SR_T_STRING, "sparam",
+		"Set used S-Params", NULL},
+    {SR_CONF_COMMAND_SET, SR_T_STRING, "cmd_set",
+		"write a command", NULL},
+    {SR_CONF_COMMAND_REQ, SR_T_STRING, "cmd_req",
+		"write a command and read answer", NULL},
 
 	/* Special stuff */
 	{SR_CONF_SESSIONFILE, SR_T_STRING, "sessionfile",

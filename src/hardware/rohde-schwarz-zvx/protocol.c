@@ -67,43 +67,8 @@ static int rohde_schwarz_zvx_get_uint64(const struct sr_dev_inst *sdi,
 SR_PRIV int rohde_schwarz_zvx_init(struct sr_scpi_dev_inst *scpi)
 {
 	int ret;
-	ret = sr_scpi_send(scpi, "*RST");
-	if (ret != SR_OK)
-		return ret;
 
 	ret = sr_scpi_send(scpi, "*CLS");
-	if (ret != SR_OK)
-		return ret;
-
-
-
-    ret = sr_scpi_send(scpi, "CALCulate2:PARameter:SDEFine 'trc11', 'S11'");
-	if (ret != SR_OK)
-		return ret;
-    ret = sr_scpi_send(scpi, "CALCulate2:PARameter:SDEFine 'trc22', 'S22'");
-	if (ret != SR_OK)
-		return ret;
-    ret = sr_scpi_send(scpi, "CALCulate4:PARameter:SDEFine 'trc12', 'S12'");
-	if (ret != SR_OK)
-		return ret;
-
-    ret = sr_scpi_send(scpi, "DISPlay:WINDow2:STATe ON");
-	if (ret != SR_OK)
-		return ret;
-    ret = sr_scpi_send(scpi, "DISPlay:WINDow3:STATe ON");
-	if (ret != SR_OK)
-		return ret;
-    ret = sr_scpi_send(scpi, "DISPlay:WINDow4:STATe ON");
-	if (ret != SR_OK)
-		return ret;
-
-    ret = sr_scpi_send(scpi, "DISPlay:WINDow2:TRACe1:FEED 'trc11'");
-	if (ret != SR_OK)
-		return ret;
-    ret = sr_scpi_send(scpi, "DISPlay:WINDow3:TRACe1:FEED 'trc22'");
-	if (ret != SR_OK)
-		return ret;
-    ret = sr_scpi_send(scpi, "DISPlay:WINDow4:TRACe1:FEED 'trc12'");
 	if (ret != SR_OK)
 		return ret;
 
@@ -226,12 +191,12 @@ SR_PRIV int rohde_schwarz_zvx_set_frequency(const struct sr_dev_inst *sdi,
 	if (devc->frequency == frequency)
 		return SR_OK;
 
-	devc->frequency = frequency;
 	g_mutex_lock(&devc->rw_mutex);
-	if ((ret = sr_scpi_send(scpi, "FREQ:CENT %fHz", devc->frequency)) != SR_OK){
+	if ((ret = sr_scpi_send(scpi, "FREQ:CENT %fHz", devc->frequency)) != SR_OK) {
 		g_mutex_unlock(&devc->rw_mutex);
 		return ret;
 	}
+	devc->frequency = frequency;
 
 	ret = sr_scpi_get_double(scpi, "FREQ:SPAN?", &devc->span);
 	g_mutex_unlock(&devc->rw_mutex);
@@ -363,6 +328,147 @@ SR_PRIV int rohde_schwarz_zvx_set_ref_level(const struct sr_dev_inst *sdi,
 	return rs_zvx_scpi_send_rwlocked(sdi, "DISP:TRAC:Y:RLEV %fdBm",
 									devc->ref_level);
 }*/
+/// ************************* S-Parameter ************************************ */
+SR_PRIV int rohde_schwarz_zvx_set_sparams(const struct sr_dev_inst *sdi,
+ char *sparams[], size_t lenght)
+{
+    int ret;
+	struct sr_scpi_dev_inst *scpi;
+	struct dev_context *devc;
+
+	if (!(scpi = sdi->conn) || !(devc = sdi->priv))
+		return SR_ERR;
+
+    g_mutex_lock(&devc->rw_mutex);
+    ret = sr_scpi_send(scpi, "DISP1:TRAC1:DEL");
+    if (ret != SR_OK) {
+        g_mutex_unlock(&devc->rw_mutex);
+        return ret;
+    }
+
+    ret = sr_scpi_send(scpi, "CALC:PAR:DEL:ALL");
+    if (ret != SR_OK) {
+        g_mutex_unlock(&devc->rw_mutex);
+        return ret;
+    }
+
+    int i = 1;
+    char display[19] = "DISP:WINDX:STAT ON";
+    char define[30] = "CALCX:PAR:SDEF 'trcXX', 'XXX'";  //S11 or Y11 or Z21...
+    char calc[17] = "CALCX:FORM SMITH";
+    char feed[30] = "DISP:WINDX:TRAC1:FEED 'trcXX'";
+    for(size_t x = 0; x < lenght; ++x) {
+        display[offset_window] = i + '0';
+        ret = sr_scpi_send(scpi, display);
+        if (ret != SR_OK) {
+            g_mutex_unlock(&devc->rw_mutex);
+            return ret;
+        }
+        define[offset_calcCH] = i + '1'; //+'2'; // Begin with defining channel 2 as channel 1 has S21 defined when reseted which led to errors
+        define[offset_create_trcName1] = sparams[x][1];
+        define[offset_create_trcName2] = sparams[x][2];
+        for(int sparam_iter = 0; sparam_iter < 3; sparam_iter++)
+            define[offset_define_parameter + sparam_iter] = sparams[x][sparam_iter];
+
+        ret = sr_scpi_send(scpi, define);
+        if (ret != SR_OK) {
+            g_mutex_unlock(&devc->rw_mutex);
+            return ret;
+        }
+        calc[offset_calcCH] = i + '1'; // Also Format channel 2 and counting
+        ret = sr_scpi_send(scpi, calc);
+        if (ret != SR_OK) {
+            g_mutex_unlock(&devc->rw_mutex);
+            return ret;
+        }
+        feed[offset_window] = i + '0';
+        feed[offset_assign_trcName1] = sparams[x][1];
+        feed[offset_assign_trcName2] = sparams[x][2];
+
+        ret = sr_scpi_send(scpi, feed);
+        if (ret != SR_OK) {
+            g_mutex_unlock(&devc->rw_mutex);
+            return ret;
+        }
+        i++;
+    }
+    g_mutex_unlock(&devc->rw_mutex);
+	return ret;
+
+}
+
+
+SR_PRIV int rohde_schwarz_zvx_preset(const struct sr_dev_inst *sdi, gboolean bool)
+{
+	int ret;
+	struct sr_scpi_dev_inst *scpi;
+	struct dev_context *devc;
+
+	if (!(scpi = sdi->conn) || !(devc = sdi->priv))
+		return SR_ERR;
+
+	g_mutex_lock(&devc->rw_mutex);
+	ret = sr_scpi_send(scpi, "*RST");
+	g_mutex_unlock(&devc->rw_mutex);
+	if (ret != SR_OK)
+		return ret;
+    devc->num_sparams = 1; // When resetet only S21 is active
+	ret = rohde_schwarz_zvx_sync(sdi);
+	return ret;
+}
+
+SR_PRIV int rohde_schwarz_zvx_get_active_traces(const struct sr_dev_inst *sdi)
+{
+	int ret;
+	struct sr_scpi_dev_inst *scpi;
+	struct dev_context *devc;
+
+	if (!(scpi = sdi->conn) || !(devc = sdi->priv))
+		return SR_ERR;
+
+    if (devc->received_cmd_str)
+		g_free(devc->received_cmd_str);
+	devc->received_cmd_str = NULL;
+
+	ret = SR_OK;
+	g_mutex_lock(&devc->rw_mutex);
+
+    char *buf;
+	gchar **strings;
+	devc->active_traces = NULL;
+	if ((ret = sr_scpi_get_string(scpi, "CONF:TRAC:CAT?", &devc->active_traces)) != SR_OK) {
+		sr_spew("get active Parameter failed!");
+		return ret;
+	}
+	if ((ret = sr_scpi_get_string(scpi, "CONF:TRAC:CAT?", &buf)) != SR_OK) {
+		sr_spew("get active Parameter failed!");
+		return ret;
+	}
+
+	strings = g_strsplit(buf, ",", devc->possible_params*2);
+	for (size_t i = 0 ; i < devc->possible_params*2 ; ++i) {
+		/* Safe active Traces as Number  */
+		gchar *str = strings[i];
+		if (str == NULL)
+		{
+            if((i % 2)) {
+                g_mutex_unlock(&devc->rw_mutex);
+                g_strfreev(strings);
+                g_free(buf);
+                sr_spew("Couldn't detect number of active Traces!");
+                return SR_ERR;
+            }
+            devc->num_sparams = i/2;
+			break;
+		}
+	}
+	g_strfreev(strings);
+	g_free(buf);
+	g_mutex_unlock(&devc->rw_mutex);
+    return ret;
+
+
+}
 
 /// ************************* clk source ************************************ */
 SR_PRIV int rohde_schwarz_zvx_read_clk_src_idx(const struct sr_dev_inst *sdi)
@@ -419,7 +525,6 @@ SR_PRIV int rohde_schwarz_zvx_set_clk_src(const struct sr_dev_inst *sdi,
 									 (idx == 0) ? "INT" : "EXT1");
 }
 
-/// ******************************************************************** */
 static void rohde_schwarz_zvx_send_packet(const struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc = sdi->priv;
@@ -436,12 +541,12 @@ static void rohde_schwarz_zvx_send_packet(const struct sr_dev_inst *sdi)
 	std_session_send_df_frame_begin(sdi);
 
 	sr_analog_init(&analog, &encoding, &meaning, &spec, 10);
-	analog.meaning->mq = SR_MQ_POWER;
-	analog.meaning->unit = SR_UNIT_DECIBEL_MW;
-	analog.meaning->mqflags = 0;
+	analog.meaning->mq = SR_MQ_N_PORT_PARAMETER;
+	analog.meaning->unit = SR_UNIT_UNITLESS;
+	analog.meaning->mqflags = SR_MQFLAG_N_PORT_S_PARAMETER;
 	analog.meaning->channels = sdi->channels;
-	analog.num_samples = devc->sweep_points;
-	analog.data = devc->y_vals;
+	analog.num_samples = devc->data_points/devc->num_sparams;
+	analog.data = devc->vals;
 	analog.encoding->unitsize = sizeof(double);
 	analog.encoding->is_float = TRUE;
 	analog.encoding->digits = 10;
@@ -450,12 +555,13 @@ static void rohde_schwarz_zvx_send_packet(const struct sr_dev_inst *sdi)
 	packet.payload = &analog;
 	sr_session_send(sdi, &packet);
 
-	analog.meaning->mq = SR_MQ_FREQUENCY;
-	analog.meaning->unit = SR_UNIT_HERTZ;
-	analog.data = devc->x_vals;
-	sr_session_send(sdi, &packet);
 
-	sr_sw_limits_update_samples_read(&devc->limits, devc->sweep_points);
+	for(size_t i = 1; i < devc->num_sparams; i++) {
+	    analog.data = devc->vals + i*analog.num_samples;
+	    sr_session_send(sdi, &packet);
+	}
+
+	sr_sw_limits_update_samples_read(&devc->limits, devc->data_points);
 	sr_sw_limits_update_frames_read(&devc->limits, 1);
 
 	std_session_send_df_frame_end(sdi);
@@ -464,6 +570,7 @@ static void rohde_schwarz_zvx_send_packet(const struct sr_dev_inst *sdi)
 static int rohde_schwarz_zvx_receive_trace(struct sr_scpi_dev_inst *scpi,
         const char *cmd, double *resp, size_t n)
 {
+	sr_info("rohde_schwarz_zvx_receive_trace. , rohde-schwarz-zvx");
 	char *buf;
 	int ret;
 	gchar **strings;
@@ -477,9 +584,8 @@ static int rohde_schwarz_zvx_receive_trace(struct sr_scpi_dev_inst *scpi,
 	for (size_t i = 0 ; i < n ; ++i) {
 		/* Work with strings, and, when done: */
 		gchar *str = strings[i];
-		if (str == NULL)
-		{
-			sr_spew("y data from trace not enough data after %zu samples", i);
+		if (str == NULL) {
+			sr_spew("data from trace not enough data after %zu samples", i);
 			break;
 		}
 		*resp++ = atof(str);
@@ -510,49 +616,40 @@ SR_PRIV int rohde_schwarz_zvx_receive_data(int fd, int revents, void *cb_data)
 		return TRUE;
 
 	g_mutex_lock(&devc->rw_mutex);
-	size_t old_sweep_pts = devc->sweep_points;
+	size_t old_data_points = devc->data_points;
 
 	ret = sr_scpi_get_int(scpi, "SWEEP:POINTS?", &sweep_points);
 	if (ret != SR_OK) {
 		g_mutex_unlock(&devc->rw_mutex);
 		return TRUE;
 	}
-	devc->sweep_points = sweep_points*4;
+	devc->sweep_points = sweep_points;
 
-	if (old_sweep_pts < devc->sweep_points) {
-		free(devc->x_vals);
-		devc->x_vals = NULL;
-		free(devc->y_vals);
-		devc->y_vals = NULL;
+	// data_points = defines number of real and imaginary values of all traces
+	devc->data_points = sweep_points*2*devc->num_sparams;
+
+	if (old_data_points < devc->data_points) {
+		free(devc->vals);
+		devc->vals = NULL;
 	}
 
-	if (!devc->x_vals || !devc->y_vals) {
-		if (!devc->x_vals)
-			devc->x_vals = g_malloc(devc->sweep_points * sizeof(double));
-		if (!devc->y_vals)
-			devc->y_vals = g_malloc(devc->sweep_points * sizeof(double));
-		if (!devc->x_vals || !devc->y_vals) {
+	if (!devc->vals ) {
+		if (!devc->vals)
+			devc->vals = g_malloc(devc->data_points * sizeof(double));
+
+		if (!devc->vals ) {
 			sr_spew("mem allocation for trace data failed!");
-			if (devc->x_vals) {
-				g_free(devc->x_vals);
-				devc->x_vals = NULL;
-			}
-			if (devc->y_vals) {
-				g_free(devc->y_vals);
-				devc->y_vals = NULL;
+			if (devc->vals) {
+				g_free(devc->vals);
+				devc->vals = NULL;
 			}
 			g_mutex_unlock(&devc->rw_mutex);
 			return TRUE;
 		}
 	}
 
-	if ((ret = rohde_schwarz_zvx_receive_trace(scpi, "CALC:DATA:DALL? FDATA",
-							devc->y_vals, devc->sweep_points)) != SR_OK) {
-		g_mutex_unlock(&devc->rw_mutex);
-		return TRUE;
-	}
-	if ((ret = rohde_schwarz_zvx_receive_trace(scpi, "CALC:DATA:DALL? FDATA",
-							devc->x_vals, devc->sweep_points)) != SR_OK) {
+	if ((ret = rohde_schwarz_zvx_receive_trace(scpi, "CALC:DATA:DALL? SDATA",
+							devc->vals, devc->data_points)) != SR_OK) {
 		g_mutex_unlock(&devc->rw_mutex);
 		return TRUE;
 	}
@@ -566,3 +663,41 @@ SR_PRIV int rohde_schwarz_zvx_receive_data(int fd, int revents, void *cb_data)
 	return TRUE;
 }
 
+
+SR_PRIV int rs_fsw_and_fsv_cmd_set(const struct sr_dev_inst *sdi, const char *cmd)
+{
+	int ret;
+	struct sr_scpi_dev_inst *scpi;
+	struct dev_context *devc;
+
+	if (!(scpi = sdi->conn) || !(devc = sdi->priv))
+		return SR_ERR;
+
+	g_mutex_lock(&devc->rw_mutex);
+	ret = sr_scpi_send(scpi, cmd);
+	g_mutex_unlock(&devc->rw_mutex);
+
+	return ret;
+}
+
+SR_PRIV int rs_fsw_and_fsv_cmd_req(const struct sr_dev_inst *sdi, const char *cmd)
+{
+	int ret;
+	struct sr_scpi_dev_inst *scpi;
+	struct dev_context *devc;
+
+	if (!(scpi = sdi->conn) || !(devc = sdi->priv))
+		return SR_ERR;
+
+	if (devc->received_cmd_str)
+		g_free(devc->received_cmd_str);
+	devc->received_cmd_str = NULL;
+
+	ret = SR_OK;
+	g_mutex_lock(&devc->rw_mutex);
+	if ((ret = sr_scpi_get_string(scpi, cmd, &devc->received_cmd_str)) != SR_OK)
+		sr_spew("rs_fsw_and_fsv_cmd_req::sr_scpi_get_string() failed!");
+	g_mutex_unlock(&devc->rw_mutex);
+
+	return ret;
+}

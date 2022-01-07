@@ -32,6 +32,36 @@ static const char *device_models[] = {
     "ZVB4-2Port",
 };
 
+static const char *sparams_2Port[] = {
+    "S11",
+    "S12",
+    "S22",
+    "S21",
+};
+
+static const char *sparams_4Port[] = {
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+
+    "S31",
+    "S32",
+    "S33",
+    "S34",
+
+    "S41",
+    "S42",
+    "S43",
+    "S44",
+};
+
+
 static const uint32_t scanopts[] = {
 	SR_CONF_CONN,
 };
@@ -53,6 +83,12 @@ static const uint32_t devopts[] = {
 //	SR_CONF_REF_LEVEL             | SR_CONF_GET | SR_CONF_SET | SR_CONF_LIST,
 
 	SR_CONF_EXTERNAL_CLOCK_SOURCE | SR_CONF_GET | SR_CONF_SET | SR_CONF_LIST,
+
+	SR_CONF_PRESET                | SR_CONF_SET,
+	SR_CONF_SPARAMS               | SR_CONF_SET | SR_CONF_GET,
+
+	SR_CONF_COMMAND_SET           | SR_CONF_SET,
+	SR_CONF_COMMAND_REQ           | SR_CONF_GET | SR_CONF_SET
 };
 
 static const char *clock_sources[] = {
@@ -110,6 +146,12 @@ static struct sr_dev_inst *probe_device(struct sr_scpi_dev_inst *scpi)
 			manufacturer, sdi->model);
 		goto fail;
 	}
+
+
+	if (sdi->model[3] == '8')
+        devc->possible_params = ARRAY_SIZE(sparams_4Port);
+	else if (sdi->model[3] == '4')
+        devc->possible_params = ARRAY_SIZE(sparams_2Port);
 
 	if (rohde_Schwarz_zvx_minmax_frequency(sdi, &devc->freq_min,
 											&devc->freq_max) != SR_OK)
@@ -177,14 +219,14 @@ static int dev_close(struct sr_dev_inst *sdi)
 
 	rohde_schwarz_zvx_local(sdi);
 
-	if (devc) {
-		if(devc->x_vals)
-			g_free(devc->x_vals);
-		devc->x_vals = NULL;
 
-		if(devc->y_vals)
-			g_free(devc->y_vals);
-		devc->y_vals = NULL;
+	if (devc->received_cmd_str)
+		g_free(devc->received_cmd_str);
+
+	if (devc) {
+		if(devc->vals)
+			g_free(devc->vals);
+		devc->vals = NULL;
 
 		g_mutex_clear(&devc->rw_mutex);
 	}
@@ -218,11 +260,26 @@ static int config_get(uint32_t key, GVariant **data,
 	case SR_CONF_SPAN:
 		*data = g_variant_new_double(devc->span);
 		break;
+	case SR_CONF_COMMAND_REQ:
+		if (devc->received_cmd_str) {
+			*data = g_variant_new_string(devc->received_cmd_str);
+			break;
+		}
+		ret = SR_ERR_NA;
+        	break;
 //	case SR_CONF_REF_LEVEL:
 //		*data = g_variant_new_double(devc->ref_level);
 //		break;
 	case SR_CONF_EXTERNAL_CLOCK_SOURCE:
 		*data = g_variant_new_string(clock_sources[devc->clk_source_idx]);
+		break;
+	case SR_CONF_SPARAMS:
+        rohde_schwarz_zvx_get_active_traces(sdi);
+		if (devc->active_traces) {
+			*data = g_variant_new_string(devc->active_traces);
+			break;
+		}
+		ret = SR_ERR_NA;
 		break;
 	default:
 		return SR_ERR_NA;
@@ -235,10 +292,10 @@ static int config_set(uint32_t key, GVariant *data,
 	const struct sr_dev_inst *sdi, const struct sr_channel_group *cg)
 {
 	int ret;
-	size_t i;
 	struct dev_context *devc;
-	const char *clksrc_str;
+	const char *str_param;
 	double dval;
+	gboolean bval;
 	(void)cg;
 
 	devc = sdi->priv;
@@ -246,6 +303,10 @@ static int config_set(uint32_t key, GVariant *data,
 	ret = SR_OK;
 	switch (key) {
 	case SR_CONF_LIMIT_MSEC:
+	case SR_CONF_PRESET:
+
+		dval = g_variant_get_boolean(data);
+		return rohde_schwarz_zvx_preset(sdi,bval);
 	case SR_CONF_LIMIT_SAMPLES:
 		return sr_sw_limits_config_set(&devc->limits, key, data);
 	case SR_CONF_BAND_CENTER_FREQUENCY:
@@ -256,17 +317,76 @@ static int config_set(uint32_t key, GVariant *data,
 		dval = g_variant_get_double(data);
 		ret = rohde_schwarz_zvx_set_span(sdi, dval);
 		break;
+    case SR_CONF_SPARAMS:
+
+        gsize lenghtofstng;
+        str_param = g_variant_get_string(data, &lenghtofstng);
+
+        char *stringparam = g_strdup(str_param);
+
+        size_t nrows = devc->possible_params;
+        size_t ncols = 3;
+        char **array = (char**) malloc(sizeof(char*)*nrows);
+        for(size_t i = 0; i < nrows; ++i)
+            array[i] = (char*) malloc(sizeof(char)*ncols);
+
+        int params = 0;
+        size_t i;
+        char *p = strtok (stringparam, ",");
+
+        while (p != NULL) {
+            strcpy(array[params++],p);
+            p = strtok (NULL, ",");
+        }
+        for (int input_iter = 0; input_iter < params; ++input_iter) {
+            gboolean matches = 0;
+            i = 0;
+            while (i < devc->possible_params) {
+                if (devc->possible_params == ARRAY_SIZE(sparams_2Port)) {
+                    if (strcmp(array[input_iter], sparams_2Port[i]) == 0)
+                        matches = 1;
+                }
+                else {
+                    if (strcmp(array[input_iter], sparams_4Port[i]) == 0)
+                        matches = 1;
+                }
+                i++;
+            }
+            if (matches != 1) {
+		        sr_err("Port %s not available in device",array[input_iter]);
+		        return SR_ERR;
+            }
+        }
+
+        devc->num_sparams = params;
+		ret = rohde_schwarz_zvx_set_sparams(sdi, array, params);
+        for (size_t i = 0; i < nrows; i++)
+            free(array[i]);
+
+        free(stringparam);
+        free(array);
+        break;
+
 //	case SR_CONF_REF_LEVEL:
 //		dval = g_variant_get_double(data);
 //		ret = rohde_schwarz_zvx_set_ref_level(sdi, dval);
 //		break;
 	case SR_CONF_EXTERNAL_CLOCK_SOURCE:
-		clksrc_str = g_variant_get_string(data, NULL);
-		for (i = 0; i < ARRAY_SIZE(clock_sources); i++)
-			if (g_strcmp0(clock_sources[i], clksrc_str) == 0) {
+		str_param = g_variant_get_string(data, NULL);
+		for (size_t i = 0; i < ARRAY_SIZE(clock_sources); i++) {
+			if (g_strcmp0(clock_sources[i], str_param) == 0) {
 				ret = rohde_schwarz_zvx_set_clk_src(sdi, i);
 				break;
 			}
+        }
+		break;
+	case SR_CONF_COMMAND_SET:
+		str_param = g_variant_get_string(data, NULL);
+		ret = rs_fsw_and_fsv_cmd_set(sdi, str_param);
+		break;
+	case SR_CONF_COMMAND_REQ:
+		str_param = g_variant_get_string(data, NULL);
+		ret = rs_fsw_and_fsv_cmd_req(sdi, str_param);
 		break;
 	default:
 		ret = SR_ERR_NA;
@@ -369,4 +489,3 @@ static struct sr_dev_driver rohde_schwarz_zvx_driver_info = {
 };
 
 SR_REGISTER_DEV_DRIVER(rohde_schwarz_zvx_driver_info);
-
